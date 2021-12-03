@@ -28,6 +28,23 @@ const (
 	MachineFinalizer = "kubevirtmachine.infrastructure.cluster.x-k8s.io"
 )
 
+type KubevirtMachineReadinessMethodSSHProbe struct{}
+type KubevirtMachineReadinessMethodReadyCondition struct{}
+
+// KubevirtMachineReadinessMethod defines the method used by the kubevirt machine
+// controller to verify the guest booted successfully
+//
+// Only one item in this struct can be defined.
+type KubevirtMachineReadinessMethod struct {
+	// SSHProbe means the KubevirtMachine is considered booted once the machine controller
+	// can ssh into the VMI and verify both the hostname and sentinel file are present within
+	// the guest.
+	SSHProbe *KubevirtMachineReadinessMethodSSHProbe `json:"sshProbe",omitempty"`
+	// ReadyCondition means the KubevirtMachine is considered booted once the Ready condition
+	// is set to True on the VMI.
+	ReadyCondition *KubevirtMachineReadinessMethodReadyCondition `json:"readinessProbe,omitempty"`
+}
+
 // KubevirtMachineSpec defines the desired state of KubevirtMachine.
 type KubevirtMachineSpec struct {
 	VMSpec kubevirtv1.VirtualMachineInstanceSpec `json:"vmSpec,omitempty"`
@@ -40,6 +57,11 @@ type KubevirtMachineSpec struct {
 	// against this machine
 	// +optional
 	Bootstrapped bool `json:"bootstrapped,omitempty"`
+
+	// KubevirtMachineReadinessMethod defines the method used by the kubevirt machine
+	// controller to verify the guest booted successfully
+	// Defaults to SSHProbe when nil
+	ReadinessMethod *KubevirtMachineReadinessMethod `json:"readinessMethod,omitempty"`
 }
 
 // KubevirtMachineStatus defines the observed state of KubevirtMachine.
