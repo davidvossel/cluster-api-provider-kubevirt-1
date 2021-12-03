@@ -20,9 +20,10 @@ import (
 	gocontext "context"
 	"encoding/base64"
 	"fmt"
+	"time"
+
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/cluster-api-provider-kubevirt/pkg/ssh"
-	"time"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-kubevirt/api/v1alpha4"
 	"sigs.k8s.io/cluster-api-provider-kubevirt/pkg/context"
@@ -413,8 +414,11 @@ func (r *KubevirtMachineReconciler) reconcileKubevirtBootstrapSecret(ctx *contex
 		return errors.New("error retrieving bootstrap data: secret value key is missing")
 	}
 
-	ctx.Logger.Info("Adding users config to bootstrap data...")
-	updatedValue := []byte(string(value) + usersCloudConfig(sshKeys.PublicKey))
+	userDataValue := value
+	if usesReadinessMethodSSHProbe(ctx) {
+		ctx.Logger.Info("Adding users config to bootstrap data for ssh readiness probe...")
+		userDataValue = []byte(string(userDataValue) + usersCloudConfig(sshKeys.PublicKey))
+	}
 
 	newBootstrapDataSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -426,7 +430,7 @@ func (r *KubevirtMachineReconciler) reconcileKubevirtBootstrapSecret(ctx *contex
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, newBootstrapDataSecret, func() error {
 		newBootstrapDataSecret.Type = clusterv1.ClusterSecretType
 		newBootstrapDataSecret.Data = map[string][]byte{
-			"userdata": updatedValue,
+			"userdata": userDataValue,
 		}
 
 		// set owner reference for secret
@@ -494,6 +498,18 @@ func (r *KubevirtMachineReconciler) reconcileWorkloadClusterClient(ctx *context.
 	}
 
 	return workloadClusterClient, nil
+}
+
+func usesReadinessMethodSSHProbe(ctx *context.MachineContext) bool {
+	if ctx.KubevirtMachine == nil {
+		return false
+	} else if ctx.KubevirtMachine.Spec.ReadinessMethod == nil {
+		// SSHProbe method is default
+		return true
+	} else if ctx.KubevirtMachine.Spec.ReadinessMethod.SSHProbe != nil {
+		return true
+	}
+	return false
 }
 
 // usersCloudConfig generates 'users' cloud config for capk user with a given ssh public key
