@@ -18,6 +18,7 @@ export KUBEVIRT_DEPLOY_PROMETHEUS=false
 export KUBEVIRT_DEPLOY_CDI=false
 export KUBEVIRT_NUM_NODES=${KUBEVIRT_NUM_NODES:-1}
 export KUBEVIRT_MEMORY_SIZE=${KUBEVIRT_MEMORY_SIZE:-15360M}
+export KUBEVIRT_DEPLOY_CDI="true"
 
 _default_clusterctl_path=./hack/tools/bin/clusterctl
 _default_virtctl_path=./hack/tools/bin/virtctl
@@ -25,10 +26,15 @@ _default_virtctl_path=./hack/tools/bin/virtctl
 export CLUSTERCTL_PATH=${CLUSTERCTL_PATH:-${_default_clusterctl_path}}
 
 _kubectl=cluster-up/cluster-up/kubectl.sh
+_ssh=cluster-up/cluster-up/ssh.sh
 
 _action=$1
 shift
 
+
+function kubevirtci::ssh() {
+    ${_ssh} $@
+}
 
 function kubevirtci::kubeconfig() {
 	cluster-up/cluster-up/kubeconfig.sh
@@ -113,6 +119,9 @@ case ${_action} in
 	;;
 "kubeconfig")
 	kubevirtci::kubeconfig
+	;;
+"ssh")
+	kubevirtci::ssh "$@"
 	;;
 "kubectl")
 	${_kubectl} "$@"

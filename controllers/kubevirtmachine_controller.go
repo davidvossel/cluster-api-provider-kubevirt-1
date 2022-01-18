@@ -158,23 +158,20 @@ func (r *KubevirtMachineReconciler) Reconcile(goctx gocontext.Context, req ctrl.
 	}
 
 	// Handle non-deleted machines
-	if !machineContext.KubevirtMachine.Status.Ready {
-		return r.reconcileNormal(machineContext)
-	} else {
+	res, err := r.reconcileNormal(machineContext)
+
+	if res.IsZero() &&
+		err == nil &&
+		!machineContext.KubevirtMachine.Status.Ready {
 		// Update the providerID on the Node
 		// The ProviderID on the Node and the providerID on  the KubevirtMachine are used to set the NodeRef
 		// This code is needed here as long as there is no Kubevirt cloud provider setting the providerID in the node
 		return r.updateNodeProviderID(machineContext)
 	}
+	return res, err
 }
 
 func (r *KubevirtMachineReconciler) reconcileNormal(ctx *context.MachineContext) (res ctrl.Result, retErr error) {
-	// If the machine is already provisioned, return
-	if ctx.KubevirtMachine.Status.Ready {
-		ctx.Logger.Info("KubevirtMachine.Status.Ready is set -- nothing to do!")
-		return ctrl.Result{}, nil
-	}
-
 	// Make sure bootstrap data is available and populated.
 	if ctx.Machine.Spec.Bootstrap.DataSecretName == nil {
 		if !util.IsControlPlaneMachine(ctx.Machine) && !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
@@ -227,6 +224,17 @@ func (r *KubevirtMachineReconciler) reconcileNormal(ctx *context.MachineContext)
 	externalMachine, err := kubevirthandler.NewMachine(ctx, infraClusterClient, vmNamespace, clusterNodeSshKeys)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrapf(err, "failed to create helper for managing the externalMachine")
+	}
+
+	// If the machine is already provisioned, return
+	if ctx.KubevirtMachine.Status.Ready {
+		ctx.Logger.Info("KubevirtMachine.Status.Ready is set -- only updating status")
+
+		if !externalMachine.Exists() {
+			conditions.MarkFalse(ctx.KubevirtMachine, clusterv1.MachineOwnerRemediatedCondition, clusterv1.DeletedReason, clusterv1.ConditionSeverityWarning, "")
+		}
+
+		return ctrl.Result{}, nil
 	}
 
 	// Provision the underlying VM if not existing
