@@ -19,6 +19,8 @@ package controllers
 import (
 	gocontext "context"
 
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -38,7 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"time"
 )
 
 // KubevirtClusterReconciler reconciles a KubevirtCluster object.
@@ -210,6 +211,7 @@ func (r *KubevirtClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.KubevirtCluster{}).
 		WithEventFilter(predicates.ResourceNotPaused(r.Log)).
+		WithEventFilter(predicates.ResourceIsNotExternallyManaged(r.Log)).
 		Build(r)
 	if err != nil {
 		return err
